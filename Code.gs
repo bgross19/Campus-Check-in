@@ -13,6 +13,8 @@ function processCheckIn(location, studentInput) {
     throw new Error("Make sure your tabs are named exactly 'Log' and 'Students'.");
   }
 
+  const userEmail = Session.getActiveUser().getEmail();
+
   // 1. Resolve Student Name and ID
   const data = studentSheet.getDataRange().getValues();
   let studentName = studentInput; 
@@ -49,13 +51,14 @@ function processCheckIn(location, studentInput) {
         let durationMins = Math.round(timeDiffMs / 60000);
         logSheet.getRange(i + 1, 5).setValue(now); 
         logSheet.getRange(i + 1, 6).setValue(durationMins); 
+        logSheet.getRange(i + 1, 7).setValue(userEmail);
         return { name: studentName, status: "out", time: durationMins };
       }
     }
   }
 
   // 3. Log a new check-in
-  logSheet.appendRow([now, location, studentId, studentName, "", ""]);
+  logSheet.appendRow([now, location, studentId, studentName, "", "", userEmail]);
   return { name: studentName, status: "in" }; 
 }
 
