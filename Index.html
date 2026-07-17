@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { 
+        font-family: Arial, sans-serif; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        height: 100vh; 
+        background-color: #f4f6f9; 
+        margin: 0; 
+      }
+      .container { 
+        background: white; 
+        padding: 2rem; 
+        border-radius: 8px; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+        width: 100%; 
+        max-width: 400px; 
+        text-align: center; 
+      }
+      select, input, button { 
+        width: 100%; 
+        padding: 14px; 
+        margin: 10px 0; 
+        border: 1px solid #ccc; 
+        border-radius: 4px; 
+        box-sizing: border-box; 
+        font-size: 18px; 
+      }
+      button { 
+        background-color: #0d6efd; 
+        color: white; 
+        border: none; 
+        cursor: pointer; 
+        font-weight: bold; 
+      }
+      button:hover { background-color: #0b5ed7; }
+      #status { 
+        margin-top: 15px; 
+        font-weight: bold; 
+        min-height: 24px; 
+      }
+      .success { color: #198754; }
+      .checkout { color: #084298; }
+      .error { color: #dc3545; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Campus Check-In</h2>
+      
+      <select id="location">
+        <option value="">Loading setup data...</option>
+      </select>
+      
+      <select id="subLocation" style="display: none;"></select>
+
+      <input type="text" id="studentInput" placeholder="Scan ID or Type Name" list="studentList" autofocus autocomplete="off">
+      <datalist id="studentList"></datalist>
+
+      <button id="submitBtn" onclick="submitCheckIn()">Check In / Out</button>
+      
+      <div id="status"></div>
+    </div>
+
+    <script>
+      const inputField = document.getElementById('studentInput');
+      const locationSelect = document.getElementById('location');
+      const subLocationSelect = document.getElementById('subLocation');
+      
+      let appData = { clubs: [], counselors: [] };
+
+      document.addEventListener("DOMContentLoaded", function() {
+        google.script.run.withSuccessHandler(initializeUI).getSetupData();
+      });
+
+      function initializeUI(data) {
+        appData = data;
+        
+        const dataList = document.getElementById('studentList');
+        data.students.forEach(name => {
+          const option = document.createElement('option');
+          option.value = name;
+          dataList.appendChild(option);
+        });
+
+        locationSelect.innerHTML = ''; 
+        if (data.locations.length === 0) {
+          const option = document.createElement('option');
+          option.value = "";
+          option.text = "No locations found in Sheet";
+          locationSelect.appendChild(option);
+        } else {
+          data.locations.forEach(loc => {
+            const option = document.createElement('option');
+            option.value = loc;
+            option.text = loc;
+            locationSelect.appendChild(option);
+          });
+        }
+
+        const savedLocation = localStorage.getItem('campusCheckInLocation');
+        if (savedLocation && data.locations.includes(savedLocation)) {
+          locationSelect.value = savedLocation;
+        }
+        
+        updateSubLocationUI(); 
+
+        const savedSubLocation = localStorage.getItem('campusCheckInSubLocation');
+        if (savedSubLocation && subLocationSelect.style.display !== 'none') {
+          let validOptions = Array.from(subLocationSelect.options).map(o => o.value);
+          if(validOptions.includes(savedSubLocation)) {
+            subLocationSelect.value = savedSubLocation;
+          }
+        }
+      }
+
+      locationSelect.addEventListener('change', function() {
+        localStorage.setItem('campusCheckInLocation', this.value);
+        updateSubLocationUI();
+      });
+
+      subLocationSelect.addEventListener('change', function() {
+        localStorage.setItem('campusCheckInSubLocation', this.value);
+      });
+
+      function updateSubLocationUI() {
+        const selection = locationSelect.value;
+        subLocationSelect.innerHTML = ''; 
+
+        if (selection === "Club" || selection === "Counseling Center") {
+          subLocationSelect.style.display = 'block';
+          
+          // --- NEW: Add the default placeholder option ---
+          const defaultOption = document.createElement('option');
+          defaultOption.value = "";
+          defaultOption.text = "- Please select -";
+          defaultOption.style.fontStyle = "italic";
+          subLocationSelect.appendChild(defaultOption);
+
+          const listToUse = selection === "Club" ? appData.clubs : appData.counselors;
+          
+          listToUse.forEach(c => {
+            const option = document.createElement('option');
+            option.value = c;
+            option.text = c;
+            subLocationSelect.appendChild(option);
+          });
+        } else {
+          subLocationSelect.style.display = 'none';
+        }
+      }
+      
+      inputField.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitCheckIn();
+        }
+      });
+
+      function submitCheckIn() {
+        let finalLocation = locationSelect.value;
+        const studentInput = inputField.value;
+        const statusDiv = document.getElementById('status');
+
+        // --- NEW: Validation check for the sub-location ---
+        if (subLocationSelect.style.display === 'block') {
+          if (!subLocationSelect.value) {
+            statusDiv.textContent = "Please select an option from the second dropdown.";
+            statusDiv.className = "error";
+            subLocationSelect.focus(); // Pulls their attention to the dropdown
+            return;
+          }
+          finalLocation = finalLocation + " - " + subLocationSelect.value;
+        }
+
+        if (!finalLocation || finalLocation === "Loading setup data...") {
+          statusDiv.textContent = "Please wait for data to load.";
+          statusDiv.className = "error";
+          return;
+        }
+
+        if (!studentInput) {
+          statusDiv.textContent = "Please scan an ID or type a name.";
+          statusDiv.className = "error";
+          inputField.focus();
+          return;
+        }
+
+        statusDiv.textContent = "Logging...";
+        statusDiv.className = "";
+        inputField.disabled = true;
+
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response.status === "in") {
+              statusDiv.textContent = "Checked in: " + response.name;
+              statusDiv.className = "success";
+            } else {
+              statusDiv.textContent = "Checked out: " + response.name + " (" + response.time + " min)";
+              statusDiv.className = "checkout"; 
+            }
+            
+            resetAndFocus();
+            
+            setTimeout(() => { 
+              if(statusDiv.textContent.includes(response.name)) statusDiv.textContent = ''; 
+            }, 4000);
+          })
+          .withFailureHandler(function(error) {
+            statusDiv.textContent = "Error logging in. Try again.";
+            statusDiv.className = "error";
+            resetAndFocus();
+          })
+          .processCheckIn(finalLocation, studentInput);
+      }
+
+      function resetAndFocus() {
+        inputField.value = '';
+        inputField.disabled = false;
+        setTimeout(() => inputField.focus(), 10); 
+      }
+    </script>
+  </body>
+</html>
