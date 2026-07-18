@@ -52,15 +52,22 @@ function processCheckIn(location, studentInput) {
         let durationMins = Math.round(timeDiffMs / 60000);
         logSheet.getRange(i + 1, 5).setValue(now); 
         logSheet.getRange(i + 1, 6).setValue(durationMins); 
-        logSheet.getRange(i + 1, 7).setValue(userEmail);
+        logSheet.getRange(i + 1, 7).setValue(sanitizeForSheets(userEmail));
         return { name: studentName, status: "out", time: durationMins };
       }
     }
   }
 
   // 3. Log a new check-in
-  logSheet.appendRow([now, location, studentId, studentName, "", "", userEmail]);
+  logSheet.appendRow([now, sanitizeForSheets(location), sanitizeForSheets(studentId), sanitizeForSheets(studentName), "", "", sanitizeForSheets(userEmail)]);
   return { name: studentName, status: "in" }; 
+}
+
+function sanitizeForSheets(value) {
+  if (typeof value === 'string' && /^[=+\-@]/.test(value)) {
+    return "'" + value;
+  }
+  return value;
 }
 
 // NEW: Fetches all setup data in one fast call
