@@ -74,6 +74,13 @@ function processCheckIn(location, studentInput) {
   }
 }
 
+function sanitizeForSheets(value) {
+  if (typeof value === 'string' && /^[=+\-@]/.test(value)) {
+    return "'" + value;
+  }
+  return value;
+}
+
 // NEW: Fetches all setup data in one fast call
 function getSetupData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
