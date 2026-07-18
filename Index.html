@@ -224,7 +224,8 @@
             }, 4000);
           })
           .withFailureHandler(function(error) {
-            statusDiv.textContent = "Error logging in. Try again.";
+            console.error(error);
+            statusDiv.textContent = "Error logging in: " + (error.message || error);
             statusDiv.className = "error";
             resetAndFocus();
           })
