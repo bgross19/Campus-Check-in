@@ -6,6 +6,44 @@ function doGet() {
 }
 
 function processCheckIn(location, studentInput) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName('Log');
+  const studentSheet = ss.getSheetByName('Students');
+
+  if (!logSheet || !studentSheet) {
+    throw new Error("Make sure your tabs are named exactly 'Log' and 'Students'.");
+  }
+
+  const userEmail = Session.getActiveUser().getEmail();
+
+  // 1. Resolve Student Name and ID
+  let studentName = studentInput;
+  let studentId = "Manual/Unknown";
+  let inputStr = String(studentInput).trim();
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "student_" + inputStr.toLowerCase();
+  const cachedData = cache.get(cacheKey);
+
+  if (cachedData) {
+    const parsed = JSON.parse(cachedData);
+    studentId = parsed.id;
+    studentName = parsed.name;
+  } else {
+    const data = studentSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      let rowId = String(data[i][0]).trim();
+      let rowName = String(data[i][1]).trim();
+
+      if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase()) {
+        studentId = rowId;
+        studentName = rowName;
+        cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName }), 21600); // 6 hours cache
+        break;
+      }
+    }
+  }
+
   const lock = LockService.getScriptLock();
   // Wait for up to 30000 milliseconds for other processes to finish.
   if (!lock.tryLock(30000)) {
@@ -13,32 +51,6 @@ function processCheckIn(location, studentInput) {
   }
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const logSheet = ss.getSheetByName('Log');
-    const studentSheet = ss.getSheetByName('Students');
-
-    if (!logSheet || !studentSheet) {
-      throw new Error("Make sure your tabs are named exactly 'Log' and 'Students'.");
-    }
-
-    const userEmail = Session.getActiveUser().getEmail();
-
-    // 1. Resolve Student Name and ID
-    const data = studentSheet.getDataRange().getValues();
-    let studentName = studentInput;
-    let studentId = "Manual/Unknown";
-
-    for (let i = 1; i < data.length; i++) {
-      let rowId = String(data[i][0]).trim();
-      let rowName = String(data[i][1]).trim();
-      let inputStr = String(studentInput).trim();
-
-      if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase()) {
-        studentId = rowId;
-        studentName = rowName;
-        break;
-      }
-    }
 
     // 2. Check for an active session within the last 1 hour
     const logData = logSheet.getDataRange().getValues();
