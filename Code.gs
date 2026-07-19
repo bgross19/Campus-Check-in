@@ -8,10 +8,9 @@ function doGet() {
 function processCheckIn(location, studentInput) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName('Log');
-  const studentSheet = ss.getSheetByName('Students');
 
-  if (!logSheet || !studentSheet) {
-    throw new Error("Make sure your tabs are named exactly 'Log' and 'Students'.");
+  if (!logSheet) {
+    throw new Error("Make sure your tab is named exactly 'Log'.");
   }
 
   const userEmail = Session.getActiveUser().getEmail();
@@ -30,6 +29,10 @@ function processCheckIn(location, studentInput) {
     studentId = parsed.id;
     studentName = parsed.name;
   } else {
+    const studentSheet = ss.getSheetByName('Students');
+    if (!studentSheet) {
+      throw new Error("Make sure your tab is named exactly 'Students'.");
+    }
     const data = studentSheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       let rowId = String(data[i][0]).trim();
@@ -112,8 +115,47 @@ function getSetupData() {
     return list;
   };
 
+  // Cache all students in the background and build the list of names
+  const studentSheet = ss.getSheetByName('Students');
+  const studentNames = [];
+  if (studentSheet) {
+    const data = studentSheet.getDataRange().getValues();
+    const cache = CacheService.getScriptCache();
+    let cacheBatch = {};
+    let batchKeyCount = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      let rowId = String(data[i][0]).trim();
+      let rowName = String(data[i][1]).trim();
+
+      if (rowName) studentNames.push(rowName);
+
+      if (rowId || rowName) {
+        const studentDataStr = JSON.stringify({ id: rowId, name: rowName });
+        if (rowId) {
+          cacheBatch["student_" + rowId.toLowerCase()] = studentDataStr;
+          batchKeyCount++;
+        }
+        if (rowName) {
+          cacheBatch["student_" + rowName.toLowerCase()] = studentDataStr;
+          batchKeyCount++;
+        }
+
+        // Put in batches of 500 keys to avoid hitting any limits
+        if (batchKeyCount >= 500) {
+          cache.putAll(cacheBatch, 21600); // 6 hours
+          cacheBatch = {};
+          batchKeyCount = 0;
+        }
+      }
+    }
+    if (batchKeyCount > 0) {
+      cache.putAll(cacheBatch, 21600);
+    }
+  }
+
   return {
-    students: getColumnData('Students', 1),     // Students Col B (index 1)
+    students: studentNames,
     locations: getColumnData('Locations', 0),   // Locations Col A (index 0)
     clubs: getColumnData('Clubs', 0),           // Clubs Col A (index 0)
     counselors: getColumnData('Counselors', 0)  // Counselors Col A (index 0)
