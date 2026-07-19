@@ -56,30 +56,41 @@ function processCheckIn(location, studentInput) {
   try {
 
     // 2. Check for an active session within the last 1 hour
-    const logData = logSheet.getDataRange().getValues();
     const now = new Date();
     const oneHourMs = 60 * 60 * 1000;
+    const lastRow = logSheet.getLastRow();
 
-    for (let i = logData.length - 1; i > 0; i--) {
-      let row = logData[i];
-      let checkOutTime = row[4];
-      if (checkOutTime) continue;
+    // Only look at the last 1000 rows to speed up check-ins/check-outs significantly.
+    // If the sheet has fewer than 1000 rows, it stops at row 2 (header is row 1).
+    const startRow = Math.max(2, lastRow - 999);
+    const numRows = lastRow - startRow + 1;
 
-      let rowId = String(row[2]).trim();
-      if (rowId !== studentId) continue;
+    if (numRows > 0) {
+      // getRange(row, column, numRows, numColumns)
+      const logData = logSheet.getRange(startRow, 1, numRows, 5).getValues();
 
-      let rowLocation = String(row[1]).trim();
-      if (rowLocation !== location) continue;
+      for (let i = logData.length - 1; i >= 0; i--) {
+        let row = logData[i];
+        let checkOutTime = row[4];
+        if (checkOutTime) continue;
 
-      let checkInTime = new Date(row[0]);
-      let timeDiffMs = now.getTime() - checkInTime.getTime();
+        let rowId = String(row[2]).trim();
+        if (rowId !== studentId) continue;
 
-      if (timeDiffMs <= oneHourMs) {
-        let durationMins = Math.round(timeDiffMs / 60000);
-        logSheet.getRange(i + 1, 5).setValue(now);
-        logSheet.getRange(i + 1, 6).setValue(durationMins);
-        logSheet.getRange(i + 1, 7).setValue(userEmail);
-        return { name: studentName, status: "out", time: durationMins };
+        let rowLocation = String(row[1]).trim();
+        if (rowLocation !== location) continue;
+
+        let checkInTime = new Date(row[0]);
+        let timeDiffMs = now.getTime() - checkInTime.getTime();
+
+        if (timeDiffMs <= oneHourMs) {
+          let durationMins = Math.round(timeDiffMs / 60000);
+          const actualRowToUpdate = startRow + i;
+          logSheet.getRange(actualRowToUpdate, 5).setValue(now);
+          logSheet.getRange(actualRowToUpdate, 6).setValue(durationMins);
+          logSheet.getRange(actualRowToUpdate, 7).setValue(userEmail);
+          return { name: studentName, status: "out", time: durationMins };
+        }
       }
     }
 
