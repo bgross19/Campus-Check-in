@@ -47,21 +47,24 @@ function processCheckIn(location, studentInput) {
 
     for (let i = logData.length - 1; i > 0; i--) {
       let row = logData[i];
-      let checkInTime = new Date(row[0]);
-      let rowLocation = String(row[1]).trim();
-      let rowId = String(row[2]).trim();
       let checkOutTime = row[4];
+      if (checkOutTime) continue;
 
-      if (rowId === studentId && rowLocation === location && !checkOutTime) {
-        let timeDiffMs = now.getTime() - checkInTime.getTime();
+      let rowId = String(row[2]).trim();
+      if (rowId !== studentId) continue;
 
-        if (timeDiffMs <= oneHourMs) {
-          let durationMins = Math.round(timeDiffMs / 60000);
-          logSheet.getRange(i + 1, 5).setValue(now);
-          logSheet.getRange(i + 1, 6).setValue(durationMins);
-          logSheet.getRange(i + 1, 7).setValue(userEmail);
-          return { name: studentName, status: "out", time: durationMins };
-        }
+      let rowLocation = String(row[1]).trim();
+      if (rowLocation !== location) continue;
+
+      let checkInTime = new Date(row[0]);
+      let timeDiffMs = now.getTime() - checkInTime.getTime();
+
+      if (timeDiffMs <= oneHourMs) {
+        let durationMins = Math.round(timeDiffMs / 60000);
+        logSheet.getRange(i + 1, 5).setValue(now);
+        logSheet.getRange(i + 1, 6).setValue(durationMins);
+        logSheet.getRange(i + 1, 7).setValue(userEmail);
+        return { name: studentName, status: "out", time: durationMins };
       }
     }
 
