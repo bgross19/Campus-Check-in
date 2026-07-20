@@ -19,6 +19,7 @@ function processCheckIn(location, studentInput) {
   let studentName = studentInput;
   let studentId = "Manual/Unknown";
   let inputStr = String(studentInput).trim();
+  let studentFound = false;
 
   const cache = CacheService.getScriptCache();
   const cacheKey = "student_" + inputStr.toLowerCase();
@@ -28,6 +29,7 @@ function processCheckIn(location, studentInput) {
     const parsed = JSON.parse(cachedData);
     studentId = parsed.id;
     studentName = parsed.name;
+    studentFound = true;
   } else {
     const studentSheet = ss.getSheetByName('Students');
     if (!studentSheet) {
@@ -42,9 +44,14 @@ function processCheckIn(location, studentInput) {
         studentId = rowId;
         studentName = rowName;
         cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName }), 21600); // 6 hours cache
+        studentFound = true;
         break;
       }
     }
+  }
+
+  if (!studentFound) {
+    throw new Error("Student Not Found. Please check the spelling or ID and try again.");
   }
 
   const lock = LockService.getScriptLock();
