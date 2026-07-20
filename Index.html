@@ -267,33 +267,48 @@
 
         statusDiv.textContent = "";
 
-        if (!html5QrcodeScanner) {
-          html5QrcodeScanner = new Html5Qrcode("reader");
-        }
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(function(stream) {
+              stream.getTracks().forEach(track => track.stop());
 
-        readerDiv.style.display = "block";
-        scanBtn.style.display = "none";
-        cancelBtn.style.display = "block";
+              if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5Qrcode("reader");
+              }
 
-        const config = { fps: 10, qrbox: { width: 250, height: 100 } };
+              readerDiv.style.display = "block";
+              scanBtn.style.display = "none";
+              cancelBtn.style.display = "block";
 
-        html5QrcodeScanner.start(
-          { facingMode: "environment" },
-          config,
-          function onScanSuccess(decodedText, decodedResult) {
-            stopCameraScan();
-            document.getElementById('studentInput').value = decodedText;
-            submitCheckIn();
-          },
-          function onScanFailure(error) {
-            // Ignored as this is called continuously when no barcode is found
-          }
-        ).catch(err => {
-          console.error("Camera error:", err);
-          statusDiv.textContent = "Error accessing camera. Please ensure permissions are granted.";
+              const config = { fps: 10, qrbox: { width: 250, height: 100 } };
+
+              html5QrcodeScanner.start(
+                { facingMode: "environment" },
+                config,
+                function onScanSuccess(decodedText, decodedResult) {
+                  stopCameraScan();
+                  document.getElementById('studentInput').value = decodedText;
+                  submitCheckIn();
+                },
+                function onScanFailure(error) {
+                  // Ignored as this is called continuously when no barcode is found
+                }
+              ).catch(err => {
+                console.error("Camera error:", err);
+                statusDiv.textContent = "Error accessing camera. Please ensure permissions are granted.";
+                statusDiv.className = "error";
+                stopCameraScan();
+              });
+            })
+            .catch(function(err) {
+              console.error("Permission error:", err);
+              statusDiv.textContent = "Error accessing camera. Please ensure permissions are granted.";
+              statusDiv.className = "error";
+            });
+        } else {
+          statusDiv.textContent = "Camera API not supported in this browser.";
           statusDiv.className = "error";
-          stopCameraScan();
-        });
+        }
       }
 
       function stopCameraScan() {
