@@ -125,10 +125,12 @@ function getSetupData() {
   const getColumnData = (sheetName, colIndex) => {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) return [];
-    const data = sheet.getDataRange().getValues();
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return []; // Only header or empty
+    const data = sheet.getRange(2, colIndex + 1, lastRow - 1, 1).getValues();
     const list = [];
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][colIndex]) list.push(String(data[i][colIndex]).trim());
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0]) list.push(String(data[i][0]).trim());
     }
     return list;
   };
