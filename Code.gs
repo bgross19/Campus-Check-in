@@ -74,7 +74,7 @@ function processCheckIn(location, studentInput) {
 
     if (numRows > 0) {
       // getRange(row, column, numRows, numColumns)
-      const logData = logSheet.getRange(startRow, 1, numRows, 5).getValues();
+      const logData = logSheet.getRange(startRow, 1, numRows, 7).getValues();
 
       for (let i = logData.length - 1; i >= 0; i--) {
         let row = logData[i];
@@ -86,6 +86,9 @@ function processCheckIn(location, studentInput) {
 
         let rowLocation = String(row[1]).trim();
         if (rowLocation !== location) continue;
+
+        let checkInUser = String(row[6]).trim();
+        if (checkInUser !== String(userEmail).trim()) continue;
 
         let checkInTime = new Date(row[0]);
         let timeDiffMs = now.getTime() - checkInTime.getTime();
