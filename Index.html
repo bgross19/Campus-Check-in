@@ -113,7 +113,27 @@
 
       document.addEventListener("DOMContentLoaded", function() {
         google.script.run.withSuccessHandler(initializeUI).getSetupData();
+        scheduleAutoRefresh();
       });
+
+      function scheduleAutoRefresh() {
+        const now = new Date();
+        const nyTimeStr = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+        const nyDateLocal = new Date(nyTimeStr);
+
+        const targetNyLocal = new Date(nyDateLocal);
+        targetNyLocal.setHours(3, 0, 0, 0);
+
+        if (targetNyLocal <= nyDateLocal) {
+          targetNyLocal.setDate(targetNyLocal.getDate() + 1);
+        }
+
+        const msUntilRefresh = targetNyLocal - nyDateLocal;
+
+        setTimeout(() => {
+          window.location.reload();
+        }, msUntilRefresh);
+      }
 
       function initializeUI(data) {
         appData = data;
