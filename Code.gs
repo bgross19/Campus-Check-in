@@ -181,6 +181,7 @@ function getSetupData() {
     students: studentNames,
     locations: getColumnData('Locations', 0),   // Locations Col A (index 0)
     clubs: getColumnData('Clubs', 0),           // Clubs Col A (index 0)
-    counselors: getColumnData('Counselors', 0)  // Counselors Col A (index 0)
+    counselors: getColumnData('Counselors', 0), // Counselors Col A (index 0)
+    lrc: getColumnData('LRC', 0)                // LRC Col A (index 0)
   };
 }

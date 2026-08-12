@@ -108,7 +108,7 @@
       const locationSelect = document.getElementById('location');
       const subLocationSelect = document.getElementById('subLocation');
       
-      let appData = { clubs: [], counselors: [] };
+      let appData = { clubs: [], counselors: [], lrc: [] };
       // let html5QrcodeScanner = null;
 
       document.addEventListener("DOMContentLoaded", function() {
@@ -189,7 +189,7 @@
         const selection = locationSelect.value;
         subLocationSelect.innerHTML = ''; 
 
-        if (selection === "Club" || selection === "Counseling Center") {
+        if (selection === "Club" || selection === "Counseling Center" || selection === "Learning Resource Center") {
           subLocationSelect.style.display = 'block';
           
           // --- NEW: Add the default placeholder option ---
@@ -199,7 +199,10 @@
           defaultOption.style.fontStyle = "italic";
           subLocationSelect.appendChild(defaultOption);
 
-          const listToUse = selection === "Club" ? appData.clubs : appData.counselors;
+          let listToUse = [];
+          if (selection === "Club") listToUse = appData.clubs;
+          else if (selection === "Counseling Center") listToUse = appData.counselors;
+          else if (selection === "Learning Resource Center") listToUse = appData.lrc;
           
           listToUse.forEach(c => {
             const option = document.createElement('option');
