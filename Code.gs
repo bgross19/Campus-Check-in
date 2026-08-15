@@ -106,7 +106,7 @@ function processCheckIn(location, studentInput) {
     }
 
     // 3. Log a new check-in
-    logSheet.appendRow([now, location, studentId, studentName, "", "", userEmail]);
+    logSheet.appendRow([now, sanitizeForSheets(location), sanitizeForSheets(studentId), sanitizeForSheets(studentName), "", "", sanitizeForSheets(userEmail)]);
     return { name: studentName, status: "in" };
   } finally {
     SpreadsheetApp.flush();
