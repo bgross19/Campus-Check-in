@@ -35,8 +35,9 @@ function processCheckIn(location, studentInput) {
     if (!studentSheet) {
       throw new Error("Make sure your tab is named exactly 'Students'.");
     }
-    const data = studentSheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
+    const lastRow = studentSheet.getLastRow();
+    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 2).getValues() : [];
+    for (let i = 0; i < data.length; i++) {
       let rowId = String(data[i][0]).trim();
       let rowName = String(data[i][1]).trim();
 
@@ -142,12 +143,13 @@ function getSetupData() {
   const studentSheet = ss.getSheetByName('Students');
   const studentNames = [];
   if (studentSheet) {
-    const data = studentSheet.getDataRange().getValues();
+    const lastRow = studentSheet.getLastRow();
+    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 2).getValues() : [];
     const cache = CacheService.getScriptCache();
     let cacheBatch = {};
     let batchKeyCount = 0;
 
-    for (let i = 1; i < data.length; i++) {
+    for (let i = 0; i < data.length; i++) {
       let rowId = String(data[i][0]).trim();
       let rowName = String(data[i][1]).trim();
 
