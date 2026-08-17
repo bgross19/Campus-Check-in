@@ -114,6 +114,25 @@ function processCheckIn(location, studentInput) {
   }
 }
 
+/**
+ * Sanitizes input to prevent formula/CSV injection when appending data to Google Sheets.
+ * Escapes values that begin with =, +, -, or @ by prepending a single quote.
+ * @param {*} value - The input to sanitize.
+ * @returns {string|*} - The sanitized string, or the original value if not a string/number.
+ */
+function sanitizeForSheets(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const strValue = String(value);
+  if (/^[=+\-@]/.test(strValue)) {
+    return "'" + strValue;
+  }
+
+  return strValue;
+}
+
 // NEW: Fetches all setup data in one fast call
 function getSetupData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
