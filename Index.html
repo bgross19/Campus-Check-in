@@ -87,8 +87,13 @@
       
       <select id="subLocation" style="display: none;"></select>
 
-      <input type="text" id="studentInput" placeholder="Scan ID or Type Name" list="studentList" autofocus autocomplete="off">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <label>Student Input</label>
+        <button id="multiToggleBtn" onclick="toggleMultiMode()" style="width: auto; padding: 5px 10px; margin: 0; font-size: 14px;">Multi-Add</button>
+      </div>
+      <input type="text" id="studentInput" placeholder="Scan ID, Type Name, or Email" list="studentList" autofocus autocomplete="off">
       <datalist id="studentList"></datalist>
+      <textarea id="multiStudentInput" placeholder="Paste multiple IDs, Names, or Emails separated by commas or lines" rows="6" style="display: none; width: 100%; padding: 14px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; font-family: Arial, sans-serif; resize: vertical;"></textarea>
 
       <!--
       <button id="scanBtn" class="scan-btn" onclick="startCameraScan()">Scan with Camera</button>
@@ -105,7 +110,29 @@
 
     <script>
       const inputField = document.getElementById('studentInput');
+      const multiInputField = document.getElementById('multiStudentInput');
+      const multiToggleBtn = document.getElementById('multiToggleBtn');
       const locationSelect = document.getElementById('location');
+      let isMultiMode = false;
+
+      function toggleMultiMode() {
+        isMultiMode = !isMultiMode;
+        if (isMultiMode) {
+          inputField.style.display = 'none';
+          multiInputField.style.display = 'block';
+          multiToggleBtn.textContent = 'Single-Add';
+          multiToggleBtn.style.backgroundColor = '#198754';
+          multiToggleBtn.style.color = '#fff';
+          multiInputField.focus();
+        } else {
+          inputField.style.display = 'block';
+          multiInputField.style.display = 'none';
+          multiToggleBtn.textContent = 'Multi-Add';
+          multiToggleBtn.style.backgroundColor = '#002D62';
+          multiToggleBtn.style.color = '#C5B358';
+          inputField.focus();
+        }
+      }
       const subLocationSelect = document.getElementById('subLocation');
       
       let appData = { clubs: [], counselors: [], lrc: [], ase: [] };
@@ -225,7 +252,6 @@
 
       function submitCheckIn() {
         let finalLocation = locationSelect.value;
-        const studentInput = inputField.value;
         const statusDiv = document.getElementById('status');
 
         // --- NEW: Validation check for the sub-location ---
@@ -245,46 +271,112 @@
           return;
         }
 
-        if (!studentInput) {
-          statusDiv.textContent = "Please scan an ID or type a name.";
-          statusDiv.className = "error";
-          inputField.focus();
-          return;
-        }
-
-        statusDiv.textContent = "Logging...";
-        statusDiv.className = "";
-        inputField.disabled = true;
-
-        google.script.run
-          .withSuccessHandler(function(response) {
-            if (response.status === "in") {
-              statusDiv.textContent = "Checked in: " + response.name;
-              statusDiv.className = "success";
-            } else {
-              statusDiv.textContent = "Checked out: " + response.name + " (" + response.time + " min)";
-              statusDiv.className = "checkout"; 
-            }
-            
-            resetAndFocus();
-            
-            setTimeout(() => { 
-              if(statusDiv.textContent.includes(response.name)) statusDiv.textContent = ''; 
-            }, 4000);
-          })
-          .withFailureHandler(function(error) {
-            console.error(error);
-            statusDiv.textContent = "Error logging in: " + (error.message || error);
+        if (isMultiMode) {
+          const rawInput = multiInputField.value;
+          if (!rawInput.trim()) {
+            statusDiv.textContent = "Please paste student inputs.";
             statusDiv.className = "error";
-            resetAndFocus();
-          })
-          .processCheckIn(finalLocation, studentInput);
+            multiInputField.focus();
+            return;
+          }
+
+          const studentInputs = rawInput.split(/[\n\t,]+/).map(s => s.trim()).filter(s => s);
+
+          if (studentInputs.length === 0) {
+            statusDiv.textContent = "No valid inputs found.";
+            statusDiv.className = "error";
+            return;
+          }
+
+          statusDiv.textContent = "Logging multiple students...";
+          statusDiv.className = "";
+          multiInputField.disabled = true;
+
+          google.script.run
+            .withSuccessHandler(function(response) {
+              let html = "";
+              if (response.successes.length > 0) {
+                html += `<div class="success">Checked In: <br/>${response.successes.join(', ')}</div>`;
+              }
+              if (response.checkouts && response.checkouts.length > 0) {
+                html += `<div class="checkout">Checked Out: <br/>${response.checkouts.join(', ')}</div>`;
+              }
+              if (response.errors.length > 0) {
+                // Escape error strings to prevent XSS from raw user input
+                const escapeHtml = (unsafe) => {
+                    return unsafe
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                 };
+                 const safeErrors = response.errors.map(escapeHtml);
+                html += `<div class="error">Failed: <br/>${safeErrors.join(', ')}</div>`;
+              }
+              if (html === "") {
+                html = "No action taken.";
+              }
+              statusDiv.innerHTML = html;
+              resetAndFocus();
+            })
+            .withFailureHandler(function(error) {
+              console.error(error);
+              statusDiv.textContent = "Error: " + (error.message || error);
+              statusDiv.className = "error";
+              resetAndFocus();
+            })
+            .processMultiCheckIn(finalLocation, studentInputs);
+
+        } else {
+          const studentInput = inputField.value;
+          if (!studentInput) {
+            statusDiv.textContent = "Please scan an ID, type a name, or email.";
+            statusDiv.className = "error";
+            inputField.focus();
+            return;
+          }
+
+          statusDiv.textContent = "Logging...";
+          statusDiv.className = "";
+          inputField.disabled = true;
+
+          google.script.run
+            .withSuccessHandler(function(response) {
+              if (response.status === "in") {
+                statusDiv.textContent = "Checked in: " + response.name;
+                statusDiv.className = "success";
+              } else {
+                statusDiv.textContent = "Checked out: " + response.name + " (" + response.time + " min)";
+                statusDiv.className = "checkout";
+              }
+
+              resetAndFocus();
+
+              setTimeout(() => {
+                if(statusDiv.textContent.includes(response.name)) statusDiv.textContent = '';
+              }, 4000);
+            })
+            .withFailureHandler(function(error) {
+              console.error(error);
+              statusDiv.textContent = "Error logging in: " + (error.message || error);
+              statusDiv.className = "error";
+              resetAndFocus();
+            })
+            .processCheckIn(finalLocation, studentInput);
+        }
       }
 
       function resetAndFocus() {
-        inputField.value = '';
-        inputField.disabled = false;
-        setTimeout(() => inputField.focus(), 10); 
+        if (isMultiMode) {
+          multiInputField.value = '';
+          multiInputField.disabled = false;
+          setTimeout(() => multiInputField.focus(), 10);
+        } else {
+          inputField.value = '';
+          inputField.disabled = false;
+          setTimeout(() => inputField.focus(), 10);
+        }
       }
 
       /*
