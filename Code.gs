@@ -36,15 +36,16 @@ function processCheckIn(location, studentInput) {
       throw new Error("Make sure your tab is named exactly 'Students'.");
     }
     const lastRow = studentSheet.getLastRow();
-    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 2).getValues() : [];
+    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 3).getValues() : [];
     for (let i = 0; i < data.length; i++) {
       let rowId = String(data[i][0]).trim();
       let rowName = String(data[i][1]).trim();
+      let rowEmail = String(data[i][2]).trim();
 
-      if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase()) {
+      if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
         studentId = rowId;
         studentName = rowName;
-        cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName }), 21600); // 6 hours cache
+        cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName, email: rowEmail }), 21600); // 6 hours cache
         studentFound = true;
         break;
       }
@@ -156,7 +157,7 @@ function getSetupData() {
   const studentNames = [];
   if (studentSheet) {
     const lastRow = studentSheet.getLastRow();
-    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 2).getValues() : [];
+    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 3).getValues() : [];
     const cache = CacheService.getScriptCache();
     let cacheBatch = {};
     let batchKeyCount = 0;
@@ -164,17 +165,22 @@ function getSetupData() {
     for (let i = 0; i < data.length; i++) {
       let rowId = String(data[i][0]).trim();
       let rowName = String(data[i][1]).trim();
+      let rowEmail = String(data[i][2]).trim();
 
       if (rowName) studentNames.push(rowName);
 
-      if (rowId || rowName) {
-        const studentDataStr = JSON.stringify({ id: rowId, name: rowName });
+      if (rowId || rowName || rowEmail) {
+        const studentDataStr = JSON.stringify({ id: rowId, name: rowName, email: rowEmail });
         if (rowId) {
           cacheBatch["student_" + rowId.toLowerCase()] = studentDataStr;
           batchKeyCount++;
         }
         if (rowName) {
           cacheBatch["student_" + rowName.toLowerCase()] = studentDataStr;
+          batchKeyCount++;
+        }
+        if (rowEmail) {
+          cacheBatch["student_" + rowEmail.toLowerCase()] = studentDataStr;
           batchKeyCount++;
         }
 
@@ -199,4 +205,164 @@ function getSetupData() {
     lrc: getColumnData('LRC', 0),               // LRC Col A (index 0)
     ase: getColumnData('ASE', 0)                // ASE Col A (index 0)
   };
+}
+
+// NEW: Multi-check-in function
+function processMultiCheckIn(location, studentInputs) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName('Log');
+  const studentSheet = ss.getSheetByName('Students');
+
+  if (!logSheet) throw new Error("Make sure your tab is named exactly 'Log'.");
+  if (!studentSheet) throw new Error("Make sure your tab is named exactly 'Students'.");
+
+  const userEmail = Session.getActiveUser().getEmail();
+  const now = new Date();
+  const cache = CacheService.getScriptCache();
+
+  let validStudents = [];
+  let invalidInputs = [];
+  let successfulCheckIns = [];
+  let successfulCheckOuts = [];
+  let errors = [];
+
+  // 1. Resolve all students first
+  const studentDataRange = studentSheet.getLastRow() > 1 ? studentSheet.getRange(2, 1, studentSheet.getLastRow() - 1, 3).getValues() : [];
+
+  for (let input of studentInputs) {
+    let inputStr = String(input).trim();
+    if (!inputStr) continue;
+
+    let cacheKey = "student_" + inputStr.toLowerCase();
+    let cachedData = cache.get(cacheKey);
+    let studentId = "Manual/Unknown";
+    let studentName = inputStr;
+    let found = false;
+
+    if (cachedData) {
+      const parsed = JSON.parse(cachedData);
+      studentId = parsed.id;
+      studentName = parsed.name;
+      found = true;
+    } else {
+      for (let i = 0; i < studentDataRange.length; i++) {
+        let rowId = String(studentDataRange[i][0]).trim();
+        let rowName = String(studentDataRange[i][1]).trim();
+        let rowEmail = String(studentDataRange[i][2]).trim();
+
+        if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
+          studentId = rowId;
+          studentName = rowName;
+          cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName, email: rowEmail }), 21600);
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (found) {
+      validStudents.push({ input: inputStr, id: studentId, name: studentName });
+    } else {
+      invalidInputs.push(inputStr);
+    }
+  }
+
+  if (validStudents.length === 0) {
+    return {
+      successes: [],
+      checkouts: [],
+      errors: invalidInputs.map(input => `${input} (Not Found)`)
+    };
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error("System is currently busy due to high traffic. Please try again in a few seconds.");
+  }
+
+  try {
+    const oneHourMs = 60 * 60 * 1000;
+    const lastRow = logSheet.getLastRow();
+    const startRow = Math.max(2, lastRow - 999);
+    const numRows = lastRow - startRow + 1;
+    let logData = [];
+    if (numRows > 0) {
+      logData = logSheet.getRange(startRow, 1, numRows, 7).getValues();
+    }
+
+    let newRowsToAppend = [];
+
+    // Process each valid student
+    for (let student of validStudents) {
+      let isCheckout = false;
+
+      // 2. Check for active session for this student
+      if (logData.length > 0) {
+        for (let i = logData.length - 1; i >= 0; i--) {
+          let row = logData[i];
+          let checkOutTime = row[4];
+          if (checkOutTime) continue;
+
+          let rowId = String(row[2]).trim();
+          if (rowId !== student.id) continue;
+
+          let rowLocation = String(row[1]).trim();
+          if (rowLocation !== location) continue;
+
+          let checkInUser = String(row[6]).trim();
+          if (checkInUser !== String(userEmail).trim()) continue;
+
+          let checkInTime = new Date(row[0]);
+          let timeDiffMs = now.getTime() - checkInTime.getTime();
+
+          if (timeDiffMs <= oneHourMs) {
+            let durationMins = Math.round(timeDiffMs / 60000);
+            const actualRowToUpdate = startRow + i;
+
+            // Check out this student by updating the specific row in place.
+            // In a batched scenario, doing this individually is fine if not many checkouts.
+            logSheet.getRange(actualRowToUpdate, 5).setValue(now);
+            logSheet.getRange(actualRowToUpdate, 6).setValue(durationMins);
+            logSheet.getRange(actualRowToUpdate, 7).setValue(userEmail);
+
+            successfulCheckOuts.push(`${student.name} (${durationMins} min)`);
+            isCheckout = true;
+
+            // Update local logData so subsequent checkouts logic doesn't pick it up again if there are duplicates
+            logData[i][4] = now;
+            break;
+          }
+        }
+      }
+
+      // 3. Prepare new check-in row
+      if (!isCheckout) {
+        newRowsToAppend.push([
+          now,
+          sanitizeForSheets(location),
+          sanitizeForSheets(student.id),
+          sanitizeForSheets(student.name),
+          "",
+          "",
+          sanitizeForSheets(userEmail)
+        ]);
+        successfulCheckIns.push(student.name);
+      }
+    }
+
+    // Append all new check-ins at once
+    if (newRowsToAppend.length > 0) {
+      logSheet.getRange(lastRow + 1, 1, newRowsToAppend.length, 7).setValues(newRowsToAppend);
+    }
+
+    // Add invalid inputs as errors
+    if (invalidInputs.length > 0) {
+      errors = invalidInputs.map(input => `${input} (Not Found)`);
+    }
+
+    return { successes: successfulCheckIns, checkouts: successfulCheckOuts, errors: errors };
+  } finally {
+    SpreadsheetApp.flush();
+    lock.releaseLock();
+  }
 }
