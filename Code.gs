@@ -5,7 +5,7 @@ function doGet() {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function processCheckIn(location, studentInput) {
+function processCheckIn(location, studentInput, manualTimeStr) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName('Log');
 
@@ -65,7 +65,8 @@ function processCheckIn(location, studentInput) {
   try {
 
     // 2. Check for an active session within the last 1 hour
-    const now = new Date();
+    const actualNow = new Date();
+    const now = manualTimeStr ? new Date(manualTimeStr) : actualNow;
     const oneHourMs = 60 * 60 * 1000;
     const lastRow = logSheet.getLastRow();
 
@@ -101,13 +102,22 @@ function processCheckIn(location, studentInput) {
           logSheet.getRange(actualRowToUpdate, 5).setValue(now);
           logSheet.getRange(actualRowToUpdate, 6).setValue(durationMins);
           logSheet.getRange(actualRowToUpdate, 7).setValue(userEmail);
+
+          if (manualTimeStr) {
+            logSheet.getRange(actualRowToUpdate, 9).setValue(actualNow); // Column I: Actual Check-Out Time
+          }
           return { name: studentName, status: "out", time: durationMins };
         }
       }
     }
 
     // 3. Log a new check-in
-    logSheet.appendRow([now, sanitizeForSheets(location), sanitizeForSheets(studentId), sanitizeForSheets(studentName), "", "", sanitizeForSheets(userEmail)]);
+    let rowData = [now, sanitizeForSheets(location), sanitizeForSheets(studentId), sanitizeForSheets(studentName), "", "", sanitizeForSheets(userEmail)];
+    if (manualTimeStr) {
+      rowData[7] = actualNow; // Column H: Actual Check-In Time
+      rowData[8] = "";        // Column I: Actual Check-Out Time
+    }
+    logSheet.appendRow(rowData);
     return { name: studentName, status: "in" };
   } finally {
     SpreadsheetApp.flush();
@@ -208,7 +218,7 @@ function getSetupData() {
 }
 
 // NEW: Multi-check-in function
-function processMultiCheckIn(location, studentInputs) {
+function processMultiCheckIn(location, studentInputs, manualTimeStr) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName('Log');
   const studentSheet = ss.getSheetByName('Students');
@@ -217,7 +227,8 @@ function processMultiCheckIn(location, studentInputs) {
   if (!studentSheet) throw new Error("Make sure your tab is named exactly 'Students'.");
 
   const userEmail = Session.getActiveUser().getEmail();
-  const now = new Date();
+  const actualNow = new Date();
+  const now = manualTimeStr ? new Date(manualTimeStr) : actualNow;
   const cache = CacheService.getScriptCache();
 
   let validStudents = [];
@@ -325,6 +336,10 @@ function processMultiCheckIn(location, studentInputs) {
             logSheet.getRange(actualRowToUpdate, 6).setValue(durationMins);
             logSheet.getRange(actualRowToUpdate, 7).setValue(userEmail);
 
+            if (manualTimeStr) {
+              logSheet.getRange(actualRowToUpdate, 9).setValue(actualNow); // Column I: Actual Check-Out Time
+            }
+
             successfulCheckOuts.push(`${student.name} (${durationMins} min)`);
             isCheckout = true;
 
@@ -337,7 +352,7 @@ function processMultiCheckIn(location, studentInputs) {
 
       // 3. Prepare new check-in row
       if (!isCheckout) {
-        newRowsToAppend.push([
+        let rowData = [
           now,
           sanitizeForSheets(location),
           sanitizeForSheets(student.id),
@@ -345,14 +360,22 @@ function processMultiCheckIn(location, studentInputs) {
           "",
           "",
           sanitizeForSheets(userEmail)
-        ]);
+        ];
+
+        if (manualTimeStr) {
+          rowData.push(actualNow); // Column H: Actual Check-In Time
+          rowData.push("");        // Column I: Actual Check-Out Time
+        }
+
+        newRowsToAppend.push(rowData);
         successfulCheckIns.push(student.name);
       }
     }
 
     // Append all new check-ins at once
     if (newRowsToAppend.length > 0) {
-      logSheet.getRange(lastRow + 1, 1, newRowsToAppend.length, 7).setValues(newRowsToAppend);
+      const numCols = newRowsToAppend[0].length;
+      logSheet.getRange(lastRow + 1, 1, newRowsToAppend.length, numCols).setValues(newRowsToAppend);
     }
 
     // Add invalid inputs as errors
