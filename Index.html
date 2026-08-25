@@ -105,6 +105,17 @@
 
       <button id="submitBtn" onclick="submitCheckIn()">Check In / Out</button>
       
+      <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px; text-align: left; font-size: 14px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="manualTimeToggle" onchange="toggleManualTime()" style="width: auto; margin-right: 10px; transform: scale(1.2);">
+          <span>Use Manual Time</span>
+        </label>
+        <div id="manualTimeContainer" style="display: none; margin-top: 10px;">
+          <label style="font-weight: bold; font-size: 14px; margin-bottom: 5px; display: block;">Select Date and Time:</label>
+          <input type="datetime-local" id="manualTimeInput" style="padding: 10px; font-size: 16px;">
+        </div>
+      </div>
+
       <div id="status"></div>
     </div>
 
@@ -112,7 +123,20 @@
       const inputField = document.getElementById('studentInput');
       const multiInputField = document.getElementById('multiStudentInput');
       const multiToggleBtn = document.getElementById('multiToggleBtn');
+
       const locationSelect = document.getElementById('location');
+      const manualTimeToggle = document.getElementById('manualTimeToggle');
+      const manualTimeContainer = document.getElementById('manualTimeContainer');
+      const manualTimeInput = document.getElementById('manualTimeInput');
+
+      function toggleManualTime() {
+        if (manualTimeToggle.checked) {
+          manualTimeContainer.style.display = 'block';
+        } else {
+          manualTimeContainer.style.display = 'none';
+        }
+      }
+
       let isMultiMode = false;
 
       function toggleMultiMode() {
@@ -254,6 +278,17 @@
         let finalLocation = locationSelect.value;
         const statusDiv = document.getElementById('status');
 
+        let manualTimeStr = null;
+        if (manualTimeToggle.checked) {
+          manualTimeStr = manualTimeInput.value;
+          if (!manualTimeStr) {
+            statusDiv.textContent = "Please select a date and time.";
+            statusDiv.className = "error";
+            manualTimeInput.focus();
+            return;
+          }
+        }
+
         // --- NEW: Validation check for the sub-location ---
         if (subLocationSelect.style.display === 'block') {
           if (!subLocationSelect.value) {
@@ -326,7 +361,7 @@
               statusDiv.className = "error";
               resetAndFocus();
             })
-            .processMultiCheckIn(finalLocation, studentInputs);
+            .processMultiCheckIn(finalLocation, studentInputs, manualTimeStr);
 
         } else {
           const studentInput = inputField.value;
@@ -363,11 +398,17 @@
               statusDiv.className = "error";
               resetAndFocus();
             })
-            .processCheckIn(finalLocation, studentInput);
+            .processCheckIn(finalLocation, studentInput, manualTimeStr);
         }
       }
 
       function resetAndFocus() {
+        if (manualTimeToggle.checked) {
+          manualTimeToggle.checked = false;
+          toggleManualTime();
+          manualTimeInput.value = '';
+        }
+
         if (isMultiMode) {
           multiInputField.value = '';
           multiInputField.disabled = false;
