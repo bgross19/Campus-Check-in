@@ -18,6 +18,7 @@ function processCheckIn(location, studentInput, manualTimeStr) {
   // 1. Resolve Student Name and ID
   let studentName = studentInput;
   let studentId = "Manual/Unknown";
+  let studentEmail = "";
   let inputStr = String(studentInput).trim();
   let studentFound = false;
 
@@ -29,6 +30,7 @@ function processCheckIn(location, studentInput, manualTimeStr) {
     const parsed = JSON.parse(cachedData);
     studentId = parsed.id;
     studentName = parsed.name;
+    studentEmail = parsed.email || "";
     studentFound = true;
   } else {
     const studentSheet = ss.getSheetByName('Students');
@@ -45,6 +47,7 @@ function processCheckIn(location, studentInput, manualTimeStr) {
       if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
         studentId = rowId;
         studentName = rowName;
+        studentEmail = rowEmail;
         cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName, email: rowEmail }), 21600); // 6 hours cache
         studentFound = true;
         break;
@@ -77,11 +80,11 @@ function processCheckIn(location, studentInput, manualTimeStr) {
 
     if (numRows > 0) {
       // getRange(row, column, numRows, numColumns)
-      const logData = logSheet.getRange(startRow, 1, numRows, 7).getValues();
+      const logData = logSheet.getRange(startRow, 1, numRows, 8).getValues();
 
       for (let i = logData.length - 1; i >= 0; i--) {
         let row = logData[i];
-        let checkOutTime = row[4];
+        let checkOutTime = row[5];
         if (checkOutTime) continue;
 
         let rowId = String(row[2]).trim();
@@ -90,7 +93,7 @@ function processCheckIn(location, studentInput, manualTimeStr) {
         let rowLocation = String(row[1]).trim();
         if (rowLocation !== location) continue;
 
-        let checkInUser = String(row[6]).trim();
+        let checkInUser = String(row[7]).trim();
         if (checkInUser !== String(userEmail).trim()) continue;
 
         let checkInTime = new Date(row[0]);
@@ -99,12 +102,12 @@ function processCheckIn(location, studentInput, manualTimeStr) {
         if (timeDiffMs <= oneHourMs) {
           let durationMins = Math.round(timeDiffMs / 60000);
           const actualRowToUpdate = startRow + i;
-          logSheet.getRange(actualRowToUpdate, 5).setValue(now);
-          logSheet.getRange(actualRowToUpdate, 6).setValue(durationMins);
-          logSheet.getRange(actualRowToUpdate, 7).setValue(userEmail);
+          logSheet.getRange(actualRowToUpdate, 6).setValue(now);
+          logSheet.getRange(actualRowToUpdate, 7).setValue(durationMins);
+          logSheet.getRange(actualRowToUpdate, 8).setValue(userEmail);
 
           if (manualTimeStr) {
-            logSheet.getRange(actualRowToUpdate, 9).setValue(actualNow); // Column I: Actual Check-Out Time
+            logSheet.getRange(actualRowToUpdate, 10).setValue(actualNow); // Column I: Actual Check-Out Time
           }
           return { name: studentName, status: "out", time: durationMins };
         }
@@ -112,10 +115,10 @@ function processCheckIn(location, studentInput, manualTimeStr) {
     }
 
     // 3. Log a new check-in
-    let rowData = [now, sanitizeForSheets(location), sanitizeForSheets(studentId), sanitizeForSheets(studentName), "", "", sanitizeForSheets(userEmail)];
+    let rowData = [now, sanitizeForSheets(location), sanitizeForSheets(studentId), sanitizeForSheets(studentName), sanitizeForSheets(studentEmail), "", "", sanitizeForSheets(userEmail)];
     if (manualTimeStr) {
-      rowData[7] = actualNow; // Column H: Actual Check-In Time
-      rowData[8] = "";        // Column I: Actual Check-Out Time
+      rowData[8] = actualNow; // Column I: Actual Check-In Time
+      rowData[9] = "";        // Column J: Actual Check-Out Time
     }
     logSheet.appendRow(rowData);
     return { name: studentName, status: "in" };
@@ -248,12 +251,14 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
     let cachedData = cache.get(cacheKey);
     let studentId = "Manual/Unknown";
     let studentName = inputStr;
+    let studentEmail = "";
     let found = false;
 
     if (cachedData) {
       const parsed = JSON.parse(cachedData);
       studentId = parsed.id;
       studentName = parsed.name;
+      studentEmail = parsed.email || "";
       found = true;
     } else {
       for (let i = 0; i < studentDataRange.length; i++) {
@@ -264,6 +269,7 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
         if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
           studentId = rowId;
           studentName = rowName;
+          studentEmail = rowEmail;
           cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName, email: rowEmail }), 21600);
           found = true;
           break;
@@ -272,7 +278,7 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
     }
 
     if (found) {
-      validStudents.push({ input: inputStr, id: studentId, name: studentName });
+      validStudents.push({ input: inputStr, id: studentId, name: studentName, email: studentEmail });
     } else {
       invalidInputs.push(inputStr);
     }
@@ -311,7 +317,7 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
       if (logData.length > 0) {
         for (let i = logData.length - 1; i >= 0; i--) {
           let row = logData[i];
-          let checkOutTime = row[4];
+          let checkOutTime = row[5];
           if (checkOutTime) continue;
 
           let rowId = String(row[2]).trim();
@@ -320,7 +326,7 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
           let rowLocation = String(row[1]).trim();
           if (rowLocation !== location) continue;
 
-          let checkInUser = String(row[6]).trim();
+          let checkInUser = String(row[7]).trim();
           if (checkInUser !== String(userEmail).trim()) continue;
 
           let checkInTime = new Date(row[0]);
@@ -332,19 +338,19 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
 
             // Check out this student by updating the specific row in place.
             // In a batched scenario, doing this individually is fine if not many checkouts.
-            logSheet.getRange(actualRowToUpdate, 5).setValue(now);
-            logSheet.getRange(actualRowToUpdate, 6).setValue(durationMins);
-            logSheet.getRange(actualRowToUpdate, 7).setValue(userEmail);
+            logSheet.getRange(actualRowToUpdate, 6).setValue(now);
+            logSheet.getRange(actualRowToUpdate, 7).setValue(durationMins);
+            logSheet.getRange(actualRowToUpdate, 8).setValue(userEmail);
 
             if (manualTimeStr) {
-              logSheet.getRange(actualRowToUpdate, 9).setValue(actualNow); // Column I: Actual Check-Out Time
+              logSheet.getRange(actualRowToUpdate, 10).setValue(actualNow); // Column I: Actual Check-Out Time
             }
 
             successfulCheckOuts.push(`${student.name} (${durationMins} min)`);
             isCheckout = true;
 
             // Update local logData so subsequent checkouts logic doesn't pick it up again if there are duplicates
-            logData[i][4] = now;
+            logData[i][5] = now;
             break;
           }
         }
@@ -357,14 +363,15 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
           sanitizeForSheets(location),
           sanitizeForSheets(student.id),
           sanitizeForSheets(student.name),
+          sanitizeForSheets(student.email),
           "",
           "",
           sanitizeForSheets(userEmail)
         ];
 
         if (manualTimeStr) {
-          rowData.push(actualNow); // Column H: Actual Check-In Time
-          rowData.push("");        // Column I: Actual Check-Out Time
+          rowData.push(actualNow); // Column I: Actual Check-In Time
+          rowData.push("");        // Column J: Actual Check-Out Time
         }
 
         newRowsToAppend.push(rowData);
@@ -387,5 +394,50 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
   } finally {
     SpreadsheetApp.flush();
     lock.releaseLock();
+  }
+}
+
+// NEW: Admin script to backfill student emails into the new Column E
+function backfillStudentEmails() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName('Log');
+  const studentSheet = ss.getSheetByName('Students');
+
+  if (!logSheet) throw new Error("Make sure your tab is named exactly 'Log'.");
+  if (!studentSheet) throw new Error("Make sure your tab is named exactly 'Students'.");
+
+  // 1. Build a dictionary mapping Student ID to Student Email
+  const studentDataRange = studentSheet.getLastRow() > 1
+      ? studentSheet.getRange(2, 1, studentSheet.getLastRow() - 1, 3).getValues()
+      : [];
+
+  const emailMap = {};
+  for (let i = 0; i < studentDataRange.length; i++) {
+    const studentId = String(studentDataRange[i][0]).trim();
+    const studentEmail = String(studentDataRange[i][2]).trim();
+
+    if (studentId) {
+      emailMap[studentId] = studentEmail;
+    }
+  }
+
+  // 2. Read the Log sheet data (specifically Student ID in Column C, which is index 2)
+  const logLastRow = logSheet.getLastRow();
+  if (logLastRow <= 1) return; // Nothing to backfill
+
+  const logDataRange = logSheet.getRange(2, 3, logLastRow - 1, 1).getValues(); // Get only Column C (Student ID)
+
+  // 3. Prepare the array to write back into Column E
+  const emailsToWrite = [];
+  for (let i = 0; i < logDataRange.length; i++) {
+    const logStudentId = String(logDataRange[i][0]).trim();
+    // Look up email, default to blank if not found as per user request
+    const email = emailMap[logStudentId] || "";
+    emailsToWrite.push([email]);
+  }
+
+  // 4. Batch write the emails to Column E (Column 5)
+  if (emailsToWrite.length > 0) {
+    logSheet.getRange(2, 5, emailsToWrite.length, 1).setValues(emailsToWrite);
   }
 }
