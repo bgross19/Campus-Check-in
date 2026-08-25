@@ -296,10 +296,10 @@
             .withSuccessHandler(function(response) {
               let html = "";
               if (response.successes.length > 0) {
-                html += `<div class="success">Checked In: <br/>${response.successes.join(', ')}</div>`;
+                html += `<div class="success">Checked In: <br/>${response.successes.join('<br/>')}</div>`;
               }
               if (response.checkouts && response.checkouts.length > 0) {
-                html += `<div class="checkout">Checked Out: <br/>${response.checkouts.join(', ')}</div>`;
+                html += `<div class="checkout">Checked Out: <br/>${response.checkouts.join('<br/>')}</div>`;
               }
               if (response.errors.length > 0) {
                 // Escape error strings to prevent XSS from raw user input
@@ -312,7 +312,7 @@
                          .replace(/'/g, "&#039;");
                  };
                  const safeErrors = response.errors.map(escapeHtml);
-                html += `<div class="error">Failed: <br/>${safeErrors.join(', ')}</div>`;
+                html += `<div class="error">Failed: <br/>${safeErrors.join('<br/>')}</div>`;
               }
               if (html === "") {
                 html = "No action taken.";
