@@ -211,6 +211,7 @@ function getSetupData() {
   }
 
   return {
+    scriptUrl: ScriptApp.getService().getUrl(),
     students: studentNames,
     locations: getColumnData('Locations', 0),   // Locations Col A (index 0)
     clubs: getColumnData('Clubs', 0),           // Clubs Col A (index 0)
