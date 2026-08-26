@@ -182,7 +182,11 @@
         const msUntilRefresh = targetNyLocal - nyDateLocal;
 
         setTimeout(() => {
-          window.location.reload();
+          if (appData && appData.scriptUrl) {
+            window.open(appData.scriptUrl, "_top");
+          } else {
+            window.location.reload();
+          }
         }, msUntilRefresh);
       }
 
