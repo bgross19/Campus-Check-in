@@ -99,7 +99,7 @@ function processCheckIn(location, studentInput, manualTimeStr) {
         let checkInTime = new Date(row[0]);
         let timeDiffMs = now.getTime() - checkInTime.getTime();
 
-        if (timeDiffMs <= oneHourMs) {
+        if (timeDiffMs >= 0 && timeDiffMs <= oneHourMs) {
           let durationMins = Math.round(timeDiffMs / 60000);
           const actualRowToUpdate = startRow + i;
           logSheet.getRange(actualRowToUpdate, 6).setValue(now);
@@ -333,7 +333,7 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
           let checkInTime = new Date(row[0]);
           let timeDiffMs = now.getTime() - checkInTime.getTime();
 
-          if (timeDiffMs <= oneHourMs) {
+          if (timeDiffMs >= 0 && timeDiffMs <= oneHourMs) {
             let durationMins = Math.round(timeDiffMs / 60000);
             const actualRowToUpdate = startRow + i;
 
