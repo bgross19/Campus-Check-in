@@ -5,6 +5,46 @@ function doGet() {
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+function resolveStudent(inputStr, cache, studentDataOrGetter) {
+  let cacheKey = "student_" + inputStr.toLowerCase();
+  let cachedData = cache.get(cacheKey);
+
+  if (cachedData) {
+    const parsed = JSON.parse(cachedData);
+    return {
+      found: true,
+      id: parsed.id,
+      name: parsed.name,
+      email: parsed.email || ""
+    };
+  }
+
+  let studentDataRange = typeof studentDataOrGetter === 'function' ? studentDataOrGetter() : studentDataOrGetter;
+
+  for (let i = 0; i < studentDataRange.length; i++) {
+    let rowId = String(studentDataRange[i][0]).trim();
+    let rowName = String(studentDataRange[i][1]).trim();
+    let rowEmail = String(studentDataRange[i][2]).trim();
+
+    if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
+      cache.put(cacheKey, JSON.stringify({ id: rowId, name: rowName, email: rowEmail }), 21600);
+      return {
+        found: true,
+        id: rowId,
+        name: rowName,
+        email: rowEmail
+      };
+    }
+  }
+
+  return {
+    found: false,
+    id: "Manual/Unknown",
+    name: inputStr,
+    email: ""
+  };
+}
+
 function processCheckIn(location, studentInput, manualTimeStr) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName('Log');
@@ -16,48 +56,25 @@ function processCheckIn(location, studentInput, manualTimeStr) {
   const userEmail = Session.getActiveUser().getEmail();
 
   // 1. Resolve Student Name and ID
-  let studentName = studentInput;
-  let studentId = "Manual/Unknown";
-  let studentEmail = "";
   let inputStr = String(studentInput).trim();
-  let studentFound = false;
-
   const cache = CacheService.getScriptCache();
-  const cacheKey = "student_" + inputStr.toLowerCase();
-  const cachedData = cache.get(cacheKey);
 
-  if (cachedData) {
-    const parsed = JSON.parse(cachedData);
-    studentId = parsed.id;
-    studentName = parsed.name;
-    studentEmail = parsed.email || "";
-    studentFound = true;
-  } else {
+  let studentResult = resolveStudent(inputStr, cache, () => {
     const studentSheet = ss.getSheetByName('Students');
     if (!studentSheet) {
       throw new Error("Make sure your tab is named exactly 'Students'.");
     }
     const lastRow = studentSheet.getLastRow();
-    const data = lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 3).getValues() : [];
-    for (let i = 0; i < data.length; i++) {
-      let rowId = String(data[i][0]).trim();
-      let rowName = String(data[i][1]).trim();
-      let rowEmail = String(data[i][2]).trim();
+    return lastRow > 1 ? studentSheet.getRange(2, 1, lastRow - 1, 3).getValues() : [];
+  });
 
-      if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
-        studentId = rowId;
-        studentName = rowName;
-        studentEmail = rowEmail;
-        cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName, email: rowEmail }), 21600); // 6 hours cache
-        studentFound = true;
-        break;
-      }
-    }
-  }
-
-  if (!studentFound) {
+  if (!studentResult.found) {
     throw new Error("Student Not Found. Please check the spelling or ID and try again.");
   }
+
+  let studentName = studentResult.name;
+  let studentId = studentResult.id;
+  let studentEmail = studentResult.email;
 
   const lock = LockService.getScriptLock();
   // Wait for up to 30000 milliseconds for other processes to finish.
@@ -248,38 +265,10 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
     let inputStr = String(input).trim();
     if (!inputStr) continue;
 
-    let cacheKey = "student_" + inputStr.toLowerCase();
-    let cachedData = cache.get(cacheKey);
-    let studentId = "Manual/Unknown";
-    let studentName = inputStr;
-    let studentEmail = "";
-    let found = false;
+    let result = resolveStudent(inputStr, cache, studentDataRange);
 
-    if (cachedData) {
-      const parsed = JSON.parse(cachedData);
-      studentId = parsed.id;
-      studentName = parsed.name;
-      studentEmail = parsed.email || "";
-      found = true;
-    } else {
-      for (let i = 0; i < studentDataRange.length; i++) {
-        let rowId = String(studentDataRange[i][0]).trim();
-        let rowName = String(studentDataRange[i][1]).trim();
-        let rowEmail = String(studentDataRange[i][2]).trim();
-
-        if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
-          studentId = rowId;
-          studentName = rowName;
-          studentEmail = rowEmail;
-          cache.put(cacheKey, JSON.stringify({ id: studentId, name: studentName, email: rowEmail }), 21600);
-          found = true;
-          break;
-        }
-      }
-    }
-
-    if (found) {
-      validStudents.push({ input: inputStr, id: studentId, name: studentName, email: studentEmail });
+    if (result.found) {
+      validStudents.push({ input: inputStr, id: result.id, name: result.name, email: result.email });
     } else {
       invalidInputs.push(inputStr);
     }
