@@ -21,20 +21,40 @@ function resolveStudent(inputStr, cache, studentDataOrGetter) {
 
   let studentDataRange = typeof studentDataOrGetter === 'function' ? studentDataOrGetter() : studentDataOrGetter;
 
-  for (let i = 0; i < studentDataRange.length; i++) {
-    let rowId = String(studentDataRange[i][0]).trim();
-    let rowName = String(studentDataRange[i][1]).trim();
-    let rowEmail = String(studentDataRange[i][2]).trim();
+  if (!studentDataRange._lookupMapExactId) {
+    const mapExactId = new Map();
+    const mapLower = new Map();
+    for (let i = 0; i < studentDataRange.length; i++) {
+      let rowId = String(studentDataRange[i][0]).trim();
+      let rowName = String(studentDataRange[i][1]).trim();
+      let rowEmail = String(studentDataRange[i][2]).trim();
 
-    if (rowId === inputStr || rowName.toLowerCase() === inputStr.toLowerCase() || (rowEmail && rowEmail.toLowerCase() === inputStr.toLowerCase())) {
-      cache.put(cacheKey, JSON.stringify({ id: rowId, name: rowName, email: rowEmail }), 21600);
-      return {
-        found: true,
-        id: rowId,
-        name: rowName,
-        email: rowEmail
-      };
+      const data = { id: rowId, name: rowName, email: rowEmail };
+
+      if (rowId && !mapExactId.has(rowId)) mapExactId.set(rowId, data);
+
+      let lowerName = rowName.toLowerCase();
+      let lowerEmail = rowEmail.toLowerCase();
+      if (lowerName && !mapLower.has(lowerName)) mapLower.set(lowerName, data);
+      if (lowerEmail && !mapLower.has(lowerEmail)) mapLower.set(lowerEmail, data);
     }
+    Object.defineProperty(studentDataRange, '_lookupMapExactId', { value: mapExactId, enumerable: false });
+    Object.defineProperty(studentDataRange, '_lookupMapLower', { value: mapLower, enumerable: false });
+  }
+
+  let match = studentDataRange._lookupMapExactId.get(inputStr);
+  if (!match) {
+    match = studentDataRange._lookupMapLower.get(inputStr.toLowerCase());
+  }
+
+  if (match) {
+    cache.put(cacheKey, JSON.stringify(match), 21600);
+    return {
+      found: true,
+      id: match.id,
+      name: match.name,
+      email: match.email
+    };
   }
 
   return {
