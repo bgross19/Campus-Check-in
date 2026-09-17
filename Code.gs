@@ -388,7 +388,7 @@ function processMultiCheckIn(location, studentInputs, manualTimeStr) {
 }
 
 // NEW: Admin script to backfill student emails into the new Column E
-function backfillStudentEmails() {
+function backfillStudentEmails_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName('Log');
   const studentSheet = ss.getSheetByName('Students');
