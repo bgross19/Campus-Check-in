@@ -486,7 +486,7 @@ function autoCheckout() {
       if (!checkOutTime || String(checkOutTime).trim() === "") {
         data[i][0] = "Autocheckout"; // Column F (Check-Out Timestamp)
         data[i][1] = "";             // Column G (Duration)
-        data[i][2] = "System";       // Column H (User Email)
+        // Keep the original User Email in Column H (data[i][2])
         hasChanges = true;
       }
     }
