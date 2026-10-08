@@ -451,3 +451,70 @@ function backfillStudentEmails_() {
     logSheet.getRange(2, 5, emailsToWrite.length, 1).setValues(emailsToWrite);
   }
 }
+
+
+// NEW: Automatically check out students who were not manually checked out at the end of the day.
+function autoCheckout() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName('Log');
+
+  if (!logSheet) {
+    console.error("Log sheet not found for auto-checkout.");
+    return;
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    console.error("Could not obtain lock for auto-checkout.");
+    return;
+  }
+
+  try {
+    const lastRow = logSheet.getLastRow();
+    if (lastRow <= 1) return; // Only headers or empty
+
+    // Get columns F (6), G (7), and H (8)
+    const range = logSheet.getRange(2, 6, lastRow - 1, 3);
+    const data = range.getValues();
+
+    let hasChanges = false;
+
+    for (let i = 0; i < data.length; i++) {
+      let checkOutTime = data[i][0]; // Column F
+
+      // If check-out time is empty, it means the student is still "checked in"
+      if (!checkOutTime || String(checkOutTime).trim() === "") {
+        data[i][0] = "Autocheckout"; // Column F (Check-Out Timestamp)
+        data[i][1] = "";             // Column G (Duration)
+        data[i][2] = "System";       // Column H (User Email)
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
+      range.setValues(data);
+    }
+
+  } finally {
+    SpreadsheetApp.flush();
+    lock.releaseLock();
+  }
+}
+
+// NEW: Setup the daily trigger for autoCheckout
+function setupAutoCheckoutTrigger() {
+  // Clear existing triggers for autoCheckout to prevent duplicates
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'autoCheckout') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+
+  // Set up a daily trigger to run around 10:00 PM - 11:00 PM
+  ScriptApp.newTrigger('autoCheckout')
+    .timeBased()
+    .everyDays(1)
+    .atHour(22)
+    .create();
+}
